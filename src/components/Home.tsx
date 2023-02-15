@@ -24,6 +24,7 @@ const Home = () => {
   const [loggedIn, setLoggedIn] = useState(false)
   const [onlineUsers, setOnlineUsers] = useState<User[]>([])
   const [chatHistory, setChatHistory] = useState<Message[]>([])
+  const [typingUsers, setTypingUsers] = useState<string[]>([])
 
   useEffect(() => {
     socket.on("welcome", (welcomeMessage) => {
@@ -48,6 +49,13 @@ const Home = () => {
         setChatHistory((prevChatHistory) => [...prevChatHistory, newMessage.message])
       })
     })
+    socket.on("typing", (typingUsers) => {
+      setTypingUsers(typingUsers)
+    })
+
+    socket.on("stopTyping", ({ username }: { username: string }) => {
+      setTypingUsers((prevTypingUsers) => prevTypingUsers.filter((user) => user !== username))
+    })
   })
 
   const submitUsername = () => {
@@ -56,10 +64,20 @@ const Home = () => {
     socket.emit("createAndSetUsername", { username })
     console.log("username", username)
   }
-  // const setMessageHandler = (e: ChangeEvent<HTMLInputElement>) => {
-  //   setMessage(e.target.value)
-  //   console.log("logging the message in handler", message)
-  // }
+  const setMessageHandler = (e: ChangeEvent<HTMLInputElement>) => {
+    setMessage(e.target.value)
+    console.log("logging the message in handler", message)
+    console.log("logging the user who is typing", username)
+    console.log(typeof username)
+    if (!typingUsers.includes(username)) {
+      setTypingUsers((prevTypingUsers) => [...prevTypingUsers, username])
+      socket.emit("typing", { username })
+    }
+
+    setTimeout(() => {
+      setTypingUsers((prevTypingUsers) => prevTypingUsers.filter((user) => user !== username))
+    }, 5000)
+  }
   const sendMessage = () => {
     const newMessage: Message = {
       sender: username,
@@ -70,6 +88,7 @@ const Home = () => {
     setChatHistory([...chatHistory, newMessage])
     socket.emit("chatHistory", chatHistory)
     console.log("chat history after emit", chatHistory)
+    setTypingUsers((prevTypingUsers) => prevTypingUsers.filter((user) => user !== username))
   }
 
   return (
@@ -101,6 +120,14 @@ const Home = () => {
             ))}
           </ListGroup>
           {/* BOTTOM AREA: NEW MESSAGE */}
+          {typingUsers.filter((user) => user !== username).length > 0 && (
+            <div>
+              {typingUsers.length === 2
+                ? `${typingUsers.filter((user) => user !== username)[0]} is typing...`
+                : `${typingUsers.filter((user) => user !== username).join(", ")} are typing...`}
+            </div>
+          )}
+
           <Form
             onSubmit={(e) => {
               e.preventDefault()
@@ -110,8 +137,8 @@ const Home = () => {
             <FormControl
               placeholder="Write your message here"
               value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              // onChange={setMessageHandler}
+              // onChange={(e) => setMessage(e.target.value)}
+              onChange={setMessageHandler}
               disabled={!loggedIn}
             />
           </Form>
